@@ -1,2 +1,1 @@
-# dev-cloudformation
-for studying cloudformation 
+### For Image Builder cfn
