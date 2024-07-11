@@ -1,0 +1,63 @@
+Parameters: 
+  BucketName: 
+    Type: "String"
+    Description: "S3 Bucket containing build artifacts; should come from the CodeBuild step in Codepipeline"
+  ObjectKey: 
+    Type: String
+    Description: "Specific reference to the build file within the bucket; should come from the CodeBuild step in Codepipeline"
+  Version:
+    Type: String
+    Description: "Version number for the ImageBuilder Component; provided by AWS Lambda in previous preparation step."
+  Architecture:
+    Type: "String"
+    Description: "Select between x86 and ARM instances"
+  InstanceType:
+    Type: "String"
+    Description: "Instance Type for building the instances"
+
+Resources:
+  BuildComponent:
+    Type: AWS::ImageBuilder::Component
+    Properties: 
+      Data: !Sub |
+        name: Spring Boot Application on Amazon Linux 2
+        description: Current version - ${Version}
+        schemaVersion: 1.0
+        phases:
+          - name: build
+            steps:
+              - name: HelloWorldStep
+                action: ExecuteBash
+                inputs:
+                  commands:
+                    - result=`aws s3 cp s3://${BucketName}/${ObjectKey} /tmp`
+                    - destination=${!result##* }
+                    - unzip $destination
+      Name: !Sub "${AWS::StackName}-Component"
+      Platform: Linux
+      Version: !Sub ${Version}
+
+  ImageRecipe:
+    Type: AWS::ImageBuilder::ImageRecipe
+    Properties: 
+      Components: 
+        - ComponentArn: !GetAtt BuildComponent.Arn
+      Name: !Sub 
+        - "${ShortName}-Image"
+        - ShortName: !Select [0, !Split ['-', !Ref AWS::StackName]]
+      ParentImage: !Sub "arn:aws:imagebuilder:${AWS::Region}:aws:image/amazon-linux-2-${Architecture}/x.x.x"
+      Version: !Sub ${Version}
+  DemoInfrastructureConfiguration:
+    Type: AWS::ImageBuilder::InfrastructureConfiguration
+    Properties: 
+      InstanceProfileName: !Sub "${InstanceProfile}"
+      InstanceTypes: 
+        - !Sub "${InstanceType}"
+      Name: !Sub "${AWS::StackName}-InfraConfig"
+Outputs:
+  DemoImageArn:
+    Description: Reference to EC2 Image Builder Output Arn
+    Value: !GetAtt DemoImage.Arn
+  DemoImageId:
+    Description: Reference to EC2 Image Builder Output ImageId
+    Value: !GetAtt DemoImage.ImageId
